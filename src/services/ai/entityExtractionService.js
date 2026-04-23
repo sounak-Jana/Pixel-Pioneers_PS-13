@@ -2,7 +2,7 @@ import axios from 'axios';
 
 class EntityExtractionService {
   constructor() {
-    this.apiBase = 'http://localhost:3001/api/ai';
+    this.apiBase = 'http://localhost:3002/api/ai';
   }
 
   async extractEntities(text) {

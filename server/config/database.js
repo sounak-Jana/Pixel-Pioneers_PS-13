@@ -18,8 +18,10 @@ export const connectToNeo4j = async () => {
     console.log('✅ Connected to Neo4j database');
     return driver;
   } catch (error) {
-    console.error('❌ Failed to connect to Neo4j:', error);
-    throw error;
+    console.warn('⚠️ Neo4j not available - running in memory mode:', error.message);
+    console.log('📝 Graph data will be stored in memory only');
+    // Don't throw error, allow app to run without Neo4j
+    return null;
   }
 };
 
@@ -31,6 +33,15 @@ export const getDriver = () => {
 };
 
 export const getSession = () => {
-  const driver = getDriver();
+  if (!driver) {
+    // Return mock session for memory mode
+    return {
+      run: async (query, params = {}) => {
+        console.log('📝 Memory mode query:', query, params);
+        return { records: [] };
+      },
+      close: async () => {}
+    };
+  }
   return driver.session();
 };

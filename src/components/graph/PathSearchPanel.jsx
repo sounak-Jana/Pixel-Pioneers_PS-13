@@ -330,7 +330,7 @@ const PathSearchPanel = ({ onClose, onPathSelect }) => {
                         marginBottom: '8px'
                       }}>
                         {nodeSequence.map((node, nodeIndex) => (
-                          <React.Fragment key={node.id}>
+                          <>
                             <span
                               style={{
                                 background: '#3b82f6',
@@ -346,7 +346,7 @@ const PathSearchPanel = ({ onClose, onPathSelect }) => {
                             {nodeIndex < nodeSequence.length - 1 && (
                               <ArrowRight size={12} color="#6b7280" />
                             )}
-                          </React.Fragment>
+                          </>
                         ))}
                       </div>
                     </div>

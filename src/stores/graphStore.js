@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 
+const getEdgeSource = (edge) => edge.source ?? edge.from;
+const getEdgeTarget = (edge) => edge.target ?? edge.to;
+
 export const useGraphStore = create(
   subscribeWithSelector((set, get) => ({
     // Graph state
@@ -25,13 +28,17 @@ export const useGraphStore = create(
     updateNode: (nodeId, updates) => set((state) => ({
       nodes: state.nodes.map(node =>
         node.id === nodeId
-          ? { 
-              ...node, 
-              data: { 
-                ...node.data, 
-                properties: { 
-                  ...node.data.properties, 
-                  ...updates 
+          ? {
+              ...node,
+              position: updates.position ? {
+                ...node.position,
+                ...updates.position
+              } : node.position,
+              data: {
+                ...node.data,
+                properties: {
+                  ...node.data.properties,
+                  ...('position' in updates ? {} : updates)
                 }
               }
             }
@@ -41,7 +48,7 @@ export const useGraphStore = create(
     
     deleteNode: (nodeId) => set((state) => ({
       nodes: state.nodes.filter(node => node.id !== nodeId),
-      edges: state.edges.filter(edge => edge.from !== nodeId && edge.to !== nodeId)
+      edges: state.edges.filter(edge => getEdgeSource(edge) !== nodeId && getEdgeTarget(edge) !== nodeId)
     })),
     
     // Edge operations
@@ -156,8 +163,8 @@ export const useGraphStore = create(
       const connectedNodeIds = new Set();
       
       edges.forEach(edge => {
-        if (edge.from === nodeId) connectedNodeIds.add(edge.to);
-        if (edge.to === nodeId) connectedNodeIds.add(edge.from);
+        if (getEdgeSource(edge) === nodeId) connectedNodeIds.add(getEdgeTarget(edge));
+        if (getEdgeTarget(edge) === nodeId) connectedNodeIds.add(getEdgeSource(edge));
       });
       
       return nodes.filter(node => connectedNodeIds.has(node.id));
@@ -165,7 +172,7 @@ export const useGraphStore = create(
     
     getNodeConnections: (nodeId) => {
       const { edges } = get();
-      return edges.filter(edge => edge.from === nodeId || edge.to === nodeId);
+      return edges.filter(edge => getEdgeSource(edge) === nodeId || getEdgeTarget(edge) === nodeId);
     },
     
     // Search functionality

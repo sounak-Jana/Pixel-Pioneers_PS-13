@@ -2,7 +2,7 @@ import axios from 'axios';
 
 class EntityExtractionService {
   constructor() {
-    this.apiBase = 'http://localhost:3002/api/ai';
+    this.apiBase = import.meta.env.VITE_SERVER_URL || 'http://localhost:3002';
   }
 
   async extractEntities(text) {
@@ -308,8 +308,8 @@ class EntityExtractionService {
 
       return {
         id: `edge-${Date.now()}-${index}`,
-        from: fromNode.id,
-        to: toNode.id,
+        source: fromNode.id,
+        target: toNode.id,
         relationship: rel.relationship,
         properties: {
           ...rel,

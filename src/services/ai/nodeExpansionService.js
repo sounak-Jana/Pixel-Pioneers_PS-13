@@ -4,7 +4,7 @@ import graphService from '../api/graphService.js';
 
 class NodeExpansionService {
   constructor() {
-    this.apiBase = 'http://localhost:3001/api/ai';
+    this.apiBase = import.meta.env.VITE_SERVER_URL || 'http://localhost:3002';
     this.expansionStrategies = {
       SEMANTIC: 'semantic',
       STRUCTURAL: 'structural',
@@ -430,8 +430,8 @@ class NodeExpansionService {
         // Create edge connecting to original node
         const newEdge = {
           id: `edge-${Date.now()}-${Math.random()}`,
-          from: originalNode.id,
-          to: newNode.id,
+          source: originalNode.id,
+          target: newNode.id,
           relationship: suggestion.relationship,
           properties: {
             confidence: suggestion.confidence,

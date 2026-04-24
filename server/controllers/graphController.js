@@ -28,7 +28,17 @@ export const createNode = async (req, res) => {
 
 export const createEdge = async (req, res) => {
   try {
-    const { id, fromNode, toNode, relationship, properties } = req.body;
+    const {
+      id,
+      fromNode,
+      toNode,
+      source,
+      target,
+      relationship,
+      properties
+    } = req.body;
+    const resolvedFrom = fromNode || source;
+    const resolvedTo = toNode || target;
     const session = getSession();
     
     const result = await session.run(
@@ -40,7 +50,7 @@ export const createEdge = async (req, res) => {
          createdAt: datetime(),
          updatedAt: datetime()
        }]->(b) RETURN r`,
-      { id, fromNode, toNode, relationship, properties }
+      { id, fromNode: resolvedFrom, toNode: resolvedTo, relationship, properties }
     );
     
     await session.close();
@@ -58,11 +68,17 @@ export const getGraph = async (req, res) => {
     const edgesResult = await session.run('MATCH (a:Node)-[r:RELATIONSHIP]->(b:Node) RETURN a, r, b');
     
     const nodes = nodesResult.records.map(record => record.get('n').properties);
-    const edges = edgesResult.records.map(record => ({
-      ...record.get('r').properties,
-      from: record.get('a').properties.id,
-      to: record.get('b').properties.id
-    }));
+    const edges = edgesResult.records.map(record => {
+      const sourceId = record.get('a').properties.id;
+      const targetId = record.get('b').properties.id;
+      return {
+        ...record.get('r').properties,
+        source: sourceId,
+        target: targetId,
+        from: sourceId,
+        to: targetId
+      };
+    });
     
     await session.close();
     res.json({ nodes, edges });
@@ -183,8 +199,17 @@ export const findPath = async (req, res) => {
     }
     
     const path = result.records[0].get('path');
+    const segments = path.segments.map(segment => ({
+      start: segment.start.properties,
+      relationship: {
+        ...segment.relationship.properties,
+        type: segment.relationship.type
+      },
+      end: segment.end.properties
+    }));
+    
     await session.close();
-    res.json({ path: path.segments });
+    res.json({ path: { segments } });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

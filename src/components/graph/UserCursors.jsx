@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Cursor } from 'lucide-react';
+import { MousePointer2 } from 'lucide-react';
 
 const UserCursors = ({ cursors }) => {
   if (!cursors || Object.keys(cursors).length === 0) {
@@ -52,7 +52,7 @@ const UserCursors = ({ cursors }) => {
                 gap: '4px'
               }}
             >
-              <Cursor 
+              <MousePointer2 
                 size={16} 
                 color={color}
                 style={{

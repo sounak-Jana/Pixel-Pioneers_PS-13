@@ -6,7 +6,7 @@ import {
   getMarkerEnd
 } from 'reactflow';
 import { motion } from 'framer-motion';
-import { ArrowRight, Link2, GitBranch, MessageSquare } from 'lucide-react';
+import { ArrowRight, Link2, GitBranch, MessageSquare, Lightbulb, Tag, User } from 'lucide-react';
 
 const edgeTypeConfig = {
   defines: { color: '#10b981', icon: ArrowRight, label: 'defines' },

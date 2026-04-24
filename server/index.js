@@ -13,9 +13,18 @@ dotenv.config();
 
 const app = express();
 const server = createServer(app);
+const clientOrigin = process.env.CLIENT_URL || 'http://localhost:5174';
+const allowedOrigins = [clientOrigin, 'http://localhost:5173', 'http://127.0.0.1:5173', 'http://127.0.0.1:5174', 'http://localhost:5175', 'http://127.0.0.1:5175'];
+
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS origin denied: ${origin}`));
+      }
+    },
     methods: ["GET", "POST"]
   }
 });
@@ -40,13 +49,19 @@ initializeSocket(io);
 
 // Connect to Neo4j and initialize schema
 connectToNeo4j()
-  .then(() => {
-    return initializeSchema();
+  .then((driver) => {
+    if (driver) {
+      return initializeSchema();
+    }
+    return Promise.resolve();
   })
-  .catch(console.error);
-
-server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📊 Graph API: http://localhost:${PORT}/api/graph`);
-  console.log(`🤖 AI API: http://localhost:${PORT}/api/ai`);
-});
+  .catch((error) => {
+    console.error('❌ Startup error:', error);
+  })
+  .finally(() => {
+    server.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`📊 Graph API: http://localhost:${PORT}/api/graph`);
+      console.log(`🤖 AI API: http://localhost:${PORT}/api/ai`);
+    });
+  });

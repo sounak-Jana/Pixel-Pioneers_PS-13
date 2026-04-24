@@ -20,7 +20,14 @@ export const connectToNeo4j = async () => {
   } catch (error) {
     console.warn('⚠️ Neo4j not available - running in memory mode:', error.message);
     console.log('📝 Graph data will be stored in memory only');
-    // Don't throw error, allow app to run without Neo4j
+    if (driver) {
+      try {
+        await driver.close();
+      } catch (closeError) {
+        console.warn('⚠️ Failed to close Neo4j driver after connection failure:', closeError.message);
+      }
+      driver = null;
+    }
     return null;
   }
 };

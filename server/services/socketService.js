@@ -53,6 +53,8 @@ export const initializeSocket = (socketIo) => {
       try {
         const { graphId, edge } = data;
         const session = getSession();
+        const sourceId = edge.source || edge.from;
+        const targetId = edge.target || edge.to;
         
         await session.run(
           `MATCH (a:Node {id: $fromNode}), (b:Node {id: $toNode})
@@ -64,7 +66,14 @@ export const initializeSocket = (socketIo) => {
              createdAt: datetime(),
              updatedAt: datetime()
            }]->(b)`,
-          { ...edge, userId: socket.id }
+          {
+            id: edge.id,
+            fromNode: sourceId,
+            toNode: targetId,
+            relationship: edge.relationship,
+            properties: edge.properties,
+            userId: socket.id
+          }
         );
         
         await session.close();

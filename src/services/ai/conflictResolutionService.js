@@ -1,9 +1,8 @@
 import axios from 'axios';
-import { useGraphStore } from '../../stores/graphStore.js';
 
 class ConflictResolutionService {
   constructor() {
-    this.apiBase = 'http://localhost:3001/api/ai';
+    this.apiBase = import.meta.env.VITE_SERVER_URL || 'http://localhost:3002';
     this.conflictTypes = {
       DUPLICATE_NODE: 'duplicate_node',
       CONTRADICTORY_RELATIONSHIP: 'contradictory_relationship',
@@ -36,6 +35,14 @@ class ConflictResolutionService {
     return conflicts;
   }
 
+  getEdgeSource(edge) {
+    return edge.source ?? edge.from;
+  }
+
+  getEdgeTarget(edge) {
+    return edge.target ?? edge.to;
+  }
+
   findDuplicateNodes(nodes) {
     const duplicates = [];
     const nodeMap = new Map();
@@ -65,8 +72,8 @@ class ConflictResolutionService {
     const relationshipMap = new Map();
 
     edges.forEach(edge => {
-      const key = `${edge.from}-${edge.to}`;
-      const reverseKey = `${edge.to}-${edge.from}`;
+      const key = `${this.getEdgeSource(edge)}-${this.getEdgeTarget(edge)}`;
+      const reverseKey = `${this.getEdgeTarget(edge)}-${this.getEdgeSource(edge)}`;
 
       // Check for opposite relationships
       if (relationshipMap.has(reverseKey)) {
@@ -138,8 +145,8 @@ class ConflictResolutionService {
     });
 
     edges.forEach(edge => {
-      const fromType = nodeTypeMap.get(edge.from);
-      const toType = nodeTypeMap.get(edge.to);
+      const fromType = nodeTypeMap.get(this.getEdgeSource(edge));
+      const toType = nodeTypeMap.get(this.getEdgeTarget(edge));
 
       if (this.isInvalidRelationshipType(fromType, toType, edge.data.relationship)) {
         conflicts.push({
@@ -248,8 +255,8 @@ class ConflictResolutionService {
       // Remove the second node and update edges
       const updatedNodes = nodes.filter(n => n.id !== entity2.id);
       const updatedEdges = edges.map(edge => {
-        if (edge.from === entity2.id) return { ...edge, from: entity1.id };
-        if (edge.to === entity2.id) return { ...edge, to: entity1.id };
+        if (this.getEdgeSource(edge) === entity2.id) return { ...edge, source: entity1.id, from: entity1.id };
+        if (this.getEdgeTarget(edge) === entity2.id) return { ...edge, target: entity1.id, to: entity1.id };
         return edge;
       });
 

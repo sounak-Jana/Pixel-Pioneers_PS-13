@@ -9,6 +9,9 @@ const SearchPanel = ({ query, onQueryChange, onClose }) => {
   const [isSearching, setIsSearching] = useState(false);
   const { nodes, edges, setSelectedElements } = useGraphStore();
 
+  const getEdgeSource = (edge) => edge.source ?? edge.from;
+  const getEdgeTarget = (edge) => edge.target ?? edge.to;
+
   useEffect(() => {
     if (query.trim()) {
       performSearch(query);
@@ -46,8 +49,8 @@ const SearchPanel = ({ query, onQueryChange, onClose }) => {
         id: edge.id,
         label: edge.data.relationship,
         description: edge.data.properties?.description || '',
-        fromNode: nodes.find(n => n.id === edge.from)?.data?.label || '',
-        toNode: nodes.find(n => n.id === edge.to)?.data?.label || '',
+        fromNode: nodes.find(n => n.id === getEdgeSource(edge))?.data?.label || '',
+        toNode: nodes.find(n => n.id === getEdgeTarget(edge))?.data?.label || '',
         relevance: calculateEdgeRelevance(edge.data, searchQuery)
       }));
 

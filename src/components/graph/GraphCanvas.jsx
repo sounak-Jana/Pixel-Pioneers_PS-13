@@ -1,11 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
+import ReactFlow, {
   Background,
   Controls,
   MiniMap,
   useNodesState,
   useEdgesState,
-  addEdge,
   ConnectionMode,
   Panel,
   MarkerType
@@ -15,6 +14,9 @@ import socketService from '../../services/socket/socketService';
 import { useGraphStore } from '../../stores/graphStore';
 import CustomNode from './CustomNode';
 import CustomEdge from './CustomEdge';
+import NodeToolbar from './NodeToolbar';
+import SearchPanel from './SearchPanel';
+import UserCursors from './UserCursors';
 
 const nodeTypes = {
   custom: CustomNode,
@@ -140,8 +142,8 @@ const GraphCanvas = ({ graphId }) => {
   const onConnect = useCallback((params) => {
     const newEdge = {
       id: `edge-${Date.now()}`,
-      from: params.source,
-      to: params.target,
+      source: params.source,
+      target: params.target,
       relationship: 'related_to',
       properties: {},
       type: 'custom',
@@ -153,9 +155,14 @@ const GraphCanvas = ({ graphId }) => {
   }, [addGraphEdge]);
 
   const onNodeDragStop = useCallback((event, node) => {
-    const updates = { x: node.position.x, y: node.position.y };
-    updateNode(node.id, updates);
-    socketService.updateNode(node.id, updates);
+    const positionUpdate = {
+      position: {
+        x: node.position.x,
+        y: node.position.y
+      }
+    };
+    updateNode(node.id, positionUpdate);
+    socketService.updateNode(node.id, positionUpdate);
   }, [updateNode]);
 
   const onPaneClick = useCallback((event) => {
@@ -182,10 +189,10 @@ const GraphCanvas = ({ graphId }) => {
   }, [reactFlowInstance, addNode]);
 
   const onSelectionChange = useCallback((elements) => {
-    const selectedNodes = elements.nodes.map(node => node.id);
-    const selectedEdges = elements.edges.map(edge => edge.id);
-    setSelectedElements(selectedNodes, selectedEdges);
-    socketService.updateSelection([...selectedNodes, ...selectedEdges]);
+    const selectedNodeIds = elements?.nodes?.map(node => node.id) || [];
+    const selectedEdgeIds = elements?.edges?.map(edge => edge.id) || [];
+    setSelectedElements(selectedNodeIds, selectedEdgeIds);
+    socketService.updateSelection([...selectedNodeIds, ...selectedEdgeIds]);
   }, [setSelectedElements]);
 
   const onMove = useCallback((event) => {
@@ -230,7 +237,7 @@ const GraphCanvas = ({ graphId }) => {
   return (
     <div 
       ref={reactFlowWrapper} 
-      style={{ width: '100vw', height: '100vh' }}
+      style={{ width: '100%', height: '100%' }}
       onMouseMove={onMove}
     >
       <ReactFlow

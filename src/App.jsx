@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import GraphCanvas from './components/graph/GraphCanvas';
+import PathSearchPanel from './components/graph/PathSearchPanel';
 import entityExtractionService from './services/ai/entityExtractionService';
 import conflictResolutionService from './services/ai/conflictResolutionService';
 import nodeExpansionService from './services/ai/nodeExpansionService';
@@ -22,8 +23,8 @@ import PixelGrid from './components/ui/PixelGrid';
 function App() {
   const [currentGraphId, setCurrentGraphId] = useState('default-graph');
   const [showLanding, setShowLanding] = useState(true);
-  const [showTextInput, setShowTextInput] = useState(false);
   const [inputText, setInputText] = useState('');
+  const [showHelp, setShowHelp] = useState(false);
   const [showConflictPanel, setShowConflictPanel] = useState(false);
   const [showPathSearch, setShowPathSearch] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -35,15 +36,9 @@ function App() {
     addNode, 
     addEdge,
     clearGraph,
-    userCursors 
+    userCursors,
+    setSelectedElements
   } = useGraphStore();
-
-  // Initialize with sample data or load existing graph
-  useEffect(() => {
-    if (!showLanding) {
-      loadSampleGraph();
-    }
-  }, [showLanding]);
 
   const loadSampleGraph = async () => {
     // Sample knowledge graph data for demonstration
@@ -93,8 +88,8 @@ function App() {
       edges: [
         {
           id: 'edge-1',
-          from: 'node-1',
-          to: 'node-2',
+          source: 'node-1',
+          target: 'node-2',
           relationship: 'includes',
           properties: {
             confidence: 0.9
@@ -103,8 +98,8 @@ function App() {
         },
         {
           id: 'edge-2',
-          from: 'node-1',
-          to: 'node-3',
+          source: 'node-1',
+          target: 'node-3',
           relationship: 'related_to',
           properties: {
             confidence: 0.8
@@ -122,15 +117,30 @@ function App() {
 
     setIsProcessing(true);
     try {
-      const result = await entityExtractionService.processTextInput(inputText, nodes);
-      
+      let result;
+
+      try {
+        result = await entityExtractionService.processTextInput(inputText, nodes);
+      } catch (error) {
+        console.warn('AI extraction endpoint failed, falling back to client extraction.', error);
+        const basicEntities = entityExtractionService.extractBasicEntities(inputText);
+        const basicRelationships = entityExtractionService.extractRelationships(inputText);
+        const nodesFromText = entityExtractionService.createNodesFromEntities(basicEntities.concepts, nodes);
+        const edgesFromText = entityExtractionService.createEdgesFromRelationships(basicRelationships, nodesFromText);
+        result = {
+          nodes: nodesFromText,
+          edges: edgesFromText,
+          entities: basicEntities,
+          confidence: entityExtractionService.calculateOverallConfidence(nodesFromText, edgesFromText)
+        };
+      }
+
       // Add new nodes and edges to the graph
       result.nodes.forEach(node => addNode(node));
       result.edges.forEach(edge => addEdge(edge));
-      
+
       setInputText('');
-      setShowTextInput(false);
-      
+
       // Check for conflicts
       const conflicts = conflictResolutionService.detectConflicts(result.nodes, result.edges);
       if (conflicts.length > 0) {
@@ -170,6 +180,13 @@ function App() {
     } catch (error) {
       console.error('Error expanding node:', error);
     }
+  };
+
+  const handlePathSelect = (path) => {
+    const pathNodeIds = Array.from(new Set(
+      path?.segments?.flatMap(segment => [segment.start?.id, segment.end?.id]).filter(Boolean) || []
+    ));
+    setSelectedElements(pathNodeIds, []);
   };
 
   const handleExportGraph = () => {
@@ -298,183 +315,196 @@ function App() {
             0%, 100% { text-shadow: 0 0 20px rgba(0, 200, 150, 0.3); }
             50% { text-shadow: 0 0 40px rgba(0, 232, 168, 0.6), 0 0 60px rgba(0, 200, 150, 0.4); }
           }
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
         `}</style>
       </div>
     );
   }
 
   return (
-    <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
-      {/* Main Graph Canvas */}
-      <GraphCanvas graphId={currentGraphId} />
-
-      {/* Floating Action Buttons */}
-      <div style={{
-        position: 'absolute',
-        bottom: 20,
-        right: 20,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 12
+    <div style={{ width: '100vw', height: '100vh', display: 'flex', overflow: 'hidden', background: '#f8fafc' }}>
+      {/* Left panel for model text input and instructions */}
+      <aside style={{
+        width: '360px',
+        minWidth: '320px',
+        background: '#ffffff',
+        borderRight: '1px solid #e5e7eb',
+        padding: '24px',
+        boxSizing: 'border-box',
+        overflowY: 'auto',
+        position: 'relative'
       }}>
-        {/* AI Text Input */}
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => setShowTextInput(true)}
-          style={{
-            background: '#10b981',
-            color: 'white',
-            border: 'none',
-            borderRadius: '12px',
-            padding: '12px',
-            cursor: 'pointer',
-            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-          title="Process Text with AI"
-        >
-          <Brain size={20} />
-        </motion.button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '20px' }}>
+          <div>
+            <div style={{ fontSize: '20px', fontWeight: 700, color: '#111827' }}>AI Text Extraction</div>
+            <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>Paste a document, technical note, or prompt to create a connected graph.</div>
+          </div>
+          <button
+            onClick={() => setShowHelp(true)}
+            title="How it works"
+            style={{
+              width: '34px',
+              height: '34px',
+              borderRadius: '50%',
+              border: 'none',
+              background: '#e5e7eb',
+              color: '#111827',
+              fontSize: '18px',
+              cursor: 'pointer'
+            }}
+          >
+            ?
+          </button>
+        </div>
 
-        {/* Node Expansion */}
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => {
-            // Expand first selected node or random node
-            const selectedNode = nodes[0]; // Simplified for demo
-            if (selectedNode) {
-              handleNodeExpansion(selectedNode.id);
-            }
-          }}
+        <textarea
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          placeholder="Paste your model text here. The AI will extract entities, concepts, and relationships into the graph view to the right."
           style={{
-            background: '#8b5cf6',
-            color: 'white',
-            border: 'none',
-            borderRadius: '12px',
-            padding: '12px',
-            cursor: 'pointer',
-            boxShadow: '0 4px 12px rgba(139, 92, 246, 0.3)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
+            width: '100%',
+            minHeight: '240px',
+            padding: '16px',
+            border: '1px solid #d1d5db',
+            borderRadius: '14px',
+            fontSize: '14px',
+            fontFamily: 'inherit',
+            resize: 'vertical',
+            outline: 'none',
+            background: '#f9fafb'
           }}
-          title="Expand Node with AI"
-        >
-          <GitBranch size={20} />
-        </motion.button>
+        />
 
-        {/* Path Search */}
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => setShowPathSearch(true)}
+        <div style={{ display: 'flex', gap: '12px', marginTop: '16px', flexWrap: 'wrap' }}>
+          <button
+            onClick={handleTextProcessing}
+            disabled={!inputText.trim() || isProcessing}
+            style={{
+              flex: 1,
+              minWidth: '130px',
+              background: inputText.trim() && !isProcessing ? '#10b981' : '#d1d5db',
+              color: 'white',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '12px 16px',
+              cursor: inputText.trim() && !isProcessing ? 'pointer' : 'not-allowed',
+              fontWeight: 600
+            }}
+          >
+            {isProcessing ? 'Processing...' : 'Extract Graph'}
+          </button>
+          <button
+            onClick={() => setInputText('')}
+            disabled={!inputText.trim()}
+            style={{
+              flex: 1,
+              minWidth: '130px',
+              background: 'white',
+              color: '#374151',
+              border: '1px solid #d1d5db',
+              borderRadius: '12px',
+              padding: '12px 16px',
+              cursor: inputText.trim() ? 'pointer' : 'not-allowed'
+            }}
+          >
+            Clear Text
+          </button>
+        </div>
+
+        {inputText.trim() && (
+          <div style={{ marginTop: '14px', fontSize: '13px', color: '#6b7280' }}>
+            Character count: {inputText.length} · Estimated nodes: ~{Math.max(1, Math.floor(inputText.split(/\s+/).length / 10))}
+          </div>
+        )}
+
+        <div style={{ marginTop: '24px', padding: '18px', borderRadius: '16px', background: '#f8fafc', border: '1px solid #e5e7eb' }}>
+          <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827', marginBottom: '10px' }}>How extraction works</div>
+          <ul style={{ paddingLeft: '18px', color: '#4b5563', fontSize: '13px', lineHeight: 1.75 }}>
+            <li>Detects entity names and technical concepts.</li>
+            <li>Creates nodes for each concept.</li>
+            <li>Links related terms using extracted relationships.</li>
+            <li>Shows the resulting graph in the right panel.</li>
+          </ul>
+        </div>
+
+        <button
+          onClick={loadSampleGraph}
           style={{
+            marginTop: '20px',
+            width: '100%',
             background: '#3b82f6',
             color: 'white',
             border: 'none',
             borderRadius: '12px',
-            padding: '12px',
+            padding: '12px 16px',
             cursor: 'pointer',
-            boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
+            fontWeight: 600
           }}
-          title="Search Paths"
         >
-          <Search size={20} />
-        </motion.button>
+          Load Example Graph
+        </button>
+      </aside>
 
-        {/* Export/Import */}
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={handleExportGraph}
-          style={{
-            background: '#f59e0b',
-            color: 'white',
-            border: 'none',
-            borderRadius: '12px',
-            padding: '12px',
-            cursor: 'pointer',
-            boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-          title="Export Graph"
-        >
-          <Upload size={20} />
-        </motion.button>
+      <main style={{ flex: 1, minWidth: 0, position: 'relative', overflow: 'hidden' }}>
+        <GraphCanvas graphId={currentGraphId} />
 
-        {/* Import */}
-        <label
-          style={{
-            background: '#6b7280',
-            color: 'white',
-            border: 'none',
-            borderRadius: '12px',
-            padding: '12px',
-            cursor: 'pointer',
-            boxShadow: '0 4px 12px rgba(107, 114, 128, 0.3)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-          title="Import Graph"
-        >
-          <FileText size={20} />
-          <input
-            type="file"
-            accept=".json"
-            onChange={handleImportGraph}
-            style={{ display: 'none' }}
-          />
-        </label>
-      </div>
-
-      {/* Status Bar */}
-      <div style={{
-        position: 'absolute',
-        top: 20,
-        left: 20,
-        background: 'rgba(255, 255, 255, 0.95)',
-        backdropFilter: 'blur(10px)',
-        borderRadius: '8px',
-        padding: '8px 16px',
-        fontSize: '12px',
-        color: '#374151',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '16px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <div style={{
-            width: '8px',
-            height: '8px',
-            borderRadius: '50%',
-            background: '#10b981'
-          }} />
-          Connected
+        <div style={{ position: 'absolute', top: 20, right: 20, display: 'flex', flexDirection: 'column', gap: '12px', zIndex: 20 }}>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowPathSearch(true)}
+            style={{
+              background: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '14px',
+              width: '46px',
+              height: '46px',
+              cursor: 'pointer',
+              boxShadow: '0 10px 24px rgba(59, 130, 246, 0.22)'
+            }}
+            title="Search Paths"
+          >
+            <Search size={20} />
+          </motion.button>
         </div>
-        <div>Nodes: {nodes.length}</div>
-        <div>Edges: {edges.length}</div>
-        {Object.keys(userCursors).length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Users size={12} />
-            {Object.keys(userCursors).length} active
-          </div>
-        )}
-      </div>
 
-      {/* Text Input Modal */}
+        <div style={{ position: 'absolute', bottom: 20, right: 20, zIndex: 20 }}>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => {
+              const selectedNode = nodes[0];
+              if (selectedNode) handleNodeExpansion(selectedNode.id);
+            }}
+            style={{
+              background: '#8b5cf6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '14px',
+              width: '46px',
+              height: '46px',
+              cursor: 'pointer',
+              boxShadow: '0 10px 24px rgba(139, 92, 246, 0.22)'
+            }}
+            title="Expand a node"
+          >
+            <GitBranch size={20} />
+          </motion.button>
+        </div>
+
+        <div style={{ position: 'absolute', top: 20, left: 20, background: 'rgba(255,255,255,0.9)', borderRadius: '14px', padding: '10px 14px', boxShadow: '0 8px 24px rgba(15,23,42,0.08)', zIndex: 20, fontSize: '13px', color: '#111827' }}>
+          <div style={{ fontWeight: 600, marginBottom: '6px' }}>Graph overview</div>
+          <div>Nodes: {nodes.length}</div>
+          <div>Edges: {edges.length}</div>
+        </div>
+      </main>
+
       <AnimatePresence>
-        {showTextInput && (
+        {showHelp && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -482,96 +512,41 @@ function App() {
             style={{
               position: 'fixed',
               inset: 0,
-              background: 'rgba(0, 0, 0, 0.5)',
+              background: 'rgba(15, 23, 42, 0.6)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              zIndex: 1000
+              zIndex: 50
             }}
-            onClick={() => setShowTextInput(false)}
+            onClick={() => setShowHelp(false)}
           >
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
+              initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
+              exit={{ scale: 0.95, opacity: 0 }}
               style={{
+                width: 'min(560px, 90%)',
                 background: 'white',
-                borderRadius: '16px',
-                padding: '24px',
-                width: '90%',
-                maxWidth: '600px',
-                boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+                borderRadius: '20px',
+                padding: '28px',
+                boxShadow: '0 24px 80px rgba(15, 23, 42, 0.18)'
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <h2 style={{
-                margin: '0 0 16px 0',
-                fontSize: '20px',
-                fontWeight: '600',
-                color: '#1f2937',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                <Brain size={20} color="#10b981" />
-                AI-Powered Knowledge Extraction
-              </h2>
-              
-              <textarea
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder="Paste your text here to extract concepts, definitions, and relationships..."
-                style={{
-                  width: '100%',
-                  height: '200px',
-                  padding: '12px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  fontFamily: 'inherit',
-                  resize: 'vertical',
-                  outline: 'none'
-                }}
-              />
-              
-              <div style={{
-                display: 'flex',
-                gap: '12px',
-                justifyContent: 'flex-end',
-                marginTop: '16px'
-              }}>
-                <button
-                  onClick={() => setShowTextInput(false)}
-                  style={{
-                    background: '#f3f4f6',
-                    color: '#374151',
-                    border: 'none',
-                    borderRadius: '6px',
-                    padding: '10px 20px',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleTextProcessing}
-                  disabled={!inputText.trim() || isProcessing}
-                  style={{
-                    background: inputText.trim() && !isProcessing ? '#10b981' : '#d1d5db',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    padding: '10px 20px',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    cursor: inputText.trim() && !isProcessing ? 'pointer' : 'not-allowed'
-                  }}
-                >
-                  {isProcessing ? 'Processing...' : 'Extract Knowledge'}
-                </button>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+                <div>
+                  <div style={{ fontSize: '18px', fontWeight: 700, color: '#111827' }}>How this site works</div>
+                  <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>Paste text and let AI generate a visual knowledge graph.</div>
+                </div>
+                <button onClick={() => setShowHelp(false)} style={{ border: 'none', background: 'transparent', color: '#374151', fontSize: '24px', cursor: 'pointer' }}>×</button>
               </div>
+              <ul style={{ paddingLeft: '18px', color: '#374151', fontSize: '14px', lineHeight: 1.8 }}>
+                <li>Enter any text or technical content into the left panel.</li>
+                <li>The AI extracts entities, concepts, and relationships.</li>
+                <li>Each extracted entity becomes a node in the graph.</li>
+                <li>Relationships are added as edges connecting related nodes.</li>
+                <li>You can pan, zoom, drag nodes, search paths and export the graph.</li>
+              </ul>
             </motion.div>
           </motion.div>
         )}

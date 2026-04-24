@@ -2,7 +2,7 @@ import axios from 'axios';
 
 class GraphService {
   constructor() {
-    this.apiBase = 'http://localhost:3001/api/graph';
+    this.apiBase = import.meta.env.VITE_SERVER_URL || 'http://localhost:3002';
   }
 
   // Basic CRUD operations
